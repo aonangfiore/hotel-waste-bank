@@ -76,21 +76,32 @@ else:
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาด: {e} (โปรดตรวจสอบว่ามีแผ่นงานชื่อ WasteLog อยู่หรือไม่)")
 
-    # --- Tab 2: เปรียบเทียบ การซื้อ vs ขยะ (Dashboard) ---
     with tab2:
-        st.header("การซื้อ vs ขยะที่เกิดขึ้น")
-        
-        try:
-            df_p = conn.read(worksheet="Purchases")
-            df_w = conn.read(worksheet="WasteLog")
-            
-            st.write("ข้อมูลเปรียบเทียบรายหมวดหมู่ (ตัวอย่าง)")
-            col1, col2 = st.columns(2)
-            col1.metric("ยอดซื้อรวม (กก.)", f"{df_p['Quantity'].sum():.2f}")
-            col2.metric("ปริมาณขยะรวม (กก.)", f"{df_w['Weight_kg'].sum():.2f}")
-            
-            # [แก้ไขแล้ว] Groupby ค่าตาม Category ก่อนพลอตกราฟ เพื่อรวมยอดขยะประเภทเดียวกัน
-            st.bar_chart(df_w.groupby('Category')['Weight_kg'].sum())
-            
-        except Exception as e:
-            st.warning("ยังไม่พบข้อมูล Purchases หรือ WasteLog ใน Google Sheets เพื่อทำสรุปผล")
+    st.header("📊 สรุปผลเปรียบเทียบ (Purchase vs Waste)")
+    
+    # ดึงข้อมูลจาก Sheets
+    df_p = conn.read(worksheet="Purchases")
+    df_w = conn.read(worksheet="WasteLog")
+    
+    # รวมยอดตามหมวดหมู่
+    buy_sum = df_p.groupby('Category')['Quantity'].sum().reset_index()
+    waste_sum = df_w.groupby('Category')['Weight_kg'].sum().reset_index()
+    
+    # รวมข้อมูลเข้าด้วยกัน (Merge)
+    comparison = pd.merge(buy_sum, waste_sum, on='Category', how='left').fillna(0)
+    
+    # คำนวณ % Waste
+    comparison['Waste_Percentage'] = (comparison['Weight_kg'] / comparison['Quantity']) * 100
+    
+    # แสดงผลด้วย Metric
+    cols = st.columns(len(comparison))
+    for i, row in comparison.iterrows():
+        cols[i].metric(
+            label=f"% Waste: {row['Category']}", 
+            value=f"{row['Weight_kg']:.1f} kg", 
+            delta=f"{row['Waste_Percentage']:.1f}% ของยอดซื้อ",
+            delta_color="inverse" # สีแดงถ้าเปอร์เซ็นต์สูง
+        )
+    
+    # กราฟแท่งเปรียบเทียบ
+    st.bar_chart(comparison.set_index('Category')[['Quantity', 'Weight_kg']])
