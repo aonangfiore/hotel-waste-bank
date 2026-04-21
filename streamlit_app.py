@@ -11,7 +11,8 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 
 # 1. ฟังก์ชันโหลดข้อมูลพนักงาน
 def load_employees():
-    return conn.read(worksheet="Employees")
+    # ไม่ต้องระบุชื่อ worksheet เพื่อให้มันดึงแผ่นแรกสุดมาเลย
+    return conn.read()
 
 # --- ส่วนของ Login ---
 if 'logged_in' not in st.session_state:
