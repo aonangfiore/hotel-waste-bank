@@ -76,32 +76,38 @@ else:
             except Exception as e:
                 st.error(f"เกิดข้อผิดพลาด: {e} (โปรดตรวจสอบว่ามีแผ่นงานชื่อ WasteLog อยู่หรือไม่)")
 
+    # --- Tab 2: เปรียบเทียบ การซื้อ vs ขยะ (Dashboard) ---
     with tab2:
-    st.header("📊 สรุปผลเปรียบเทียบ (Purchase vs Waste)")
-    
-    # ดึงข้อมูลจาก Sheets
-    df_p = conn.read(worksheet="Purchases")
-    df_w = conn.read(worksheet="WasteLog")
-    
-    # รวมยอดตามหมวดหมู่
-    buy_sum = df_p.groupby('Category')['Quantity'].sum().reset_index()
-    waste_sum = df_w.groupby('Category')['Weight_kg'].sum().reset_index()
-    
-    # รวมข้อมูลเข้าด้วยกัน (Merge)
-    comparison = pd.merge(buy_sum, waste_sum, on='Category', how='left').fillna(0)
-    
-    # คำนวณ % Waste
-    comparison['Waste_Percentage'] = (comparison['Weight_kg'] / comparison['Quantity']) * 100
-    
-    # แสดงผลด้วย Metric
-    cols = st.columns(len(comparison))
-    for i, row in comparison.iterrows():
-        cols[i].metric(
-            label=f"% Waste: {row['Category']}", 
-            value=f"{row['Weight_kg']:.1f} kg", 
-            delta=f"{row['Waste_Percentage']:.1f}% ของยอดซื้อ",
-            delta_color="inverse" # สีแดงถ้าเปอร์เซ็นต์สูง
-        )
-    
-    # กราฟแท่งเปรียบเทียบ
-    st.bar_chart(comparison.set_index('Category')[['Quantity', 'Weight_kg']])
+        st.header("📊 สรุปผลเปรียบเทียบ (Purchase vs Waste)")
+        
+        # ดึงข้อมูลจาก Sheets
+        df_p = conn.read(worksheet="Purchases")
+        df_w = conn.read(worksheet="WasteLog")
+        
+        if not df_p.empty and not df_w.empty:
+            # รวมยอดซื้อและยอดขยะตาม Category
+            buy_sum = df_p.groupby('Category')['Quantity'].sum().reset_index()
+            waste_sum = df_w.groupby('Category')['Weight_kg'].sum().reset_index()
+            
+            # Merge ข้อมูลเข้าด้วยกัน
+            comparison = pd.merge(buy_sum, waste_sum, on='Category', how='left').fillna(0)
+            
+            # คำนวณ % Waste (เลี่ยงการหารด้วยศูนย์)
+            comparison['Waste_Percentage'] = (comparison['Weight_kg'] / comparison['Quantity'].replace(0, 1)) * 100
+            
+            # แสดง Metric สรุป
+            st.subheader("สถานะแยกตามประเภท")
+            m_cols = st.columns(len(comparison))
+            for idx, row in comparison.iterrows():
+                m_cols[idx].metric(
+                    label=row['Category'],
+                    value=f"{row['Weight_kg']:.1f} kg",
+                    delta=f"{row['Waste_Percentage']:.1f}% ของยอดซื้อ",
+                    delta_color="inverse"
+                )
+            
+            # แสดงกราฟเปรียบเทียบ
+            st.subheader("กราฟเปรียบเทียบยอดซื้อ vs ขยะ")
+            st.bar_chart(comparison.set_index('Category')[['Quantity', 'Weight_kg']])
+        else:
+            st.info("ยังไม่มีข้อมูลการซื้อหรือข้อมูลขยะในระบบ")
