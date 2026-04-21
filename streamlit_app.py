@@ -3,16 +3,15 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import datetime
 
-# ตั้งค่าหน้าจอสำหรับมือถือ
-st.set_page_config(page_title="Green Hotel Waste Bank", layout="centered")
+# 1. ตั้งค่าหน้าจอสำหรับมือถือ
+st.set_page_config(page_title="Hotel Waste Bank", layout="centered")
 
-# เชื่อมต่อ Google Sheets (ต้องตั้งค่า Secrets ใน Streamlit Cloud)
+# 2. เชื่อมต่อ Google Sheets
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-# 1. ฟังก์ชันโหลดข้อมูลพนักงาน
+# ฟังก์ชันโหลดข้อมูลพนักงาน (เพิ่ม ttl=0 เพื่อให้ข้อมูลเป็นปัจจุบันเสมอ)
 def load_employees():
-    # ไม่ต้องระบุชื่อ worksheet เพื่อให้มันดึงแผ่นแรกสุดมาเลย
-    return conn.read()
+    return conn.read(ttl=0)
 
 # --- ส่วนของ Login ---
 if 'logged_in' not in st.session_state:
@@ -25,13 +24,14 @@ if not st.session_state.logged_in:
     
     if st.button("เข้าสู่ระบบ", use_container_width=True):
         df_emp = load_employees()
-        # ตรวจสอบรหัส (แปลง EmployeeID เป็น string ด้วยเพื่อป้องกันปัญหา Data Type ไม่ตรงกัน)
-        user = df_emp[(df_emp['EmployeeID'].astype(str) == emp_id) & (df_emp['PIN'].astype(str) == pin)]
+        # ตรวจสอบรหัส (แปลงเป็น string ทั้งคู่เพื่อป้องกัน Error)
+        user = df_emp[(df_emp['EmployeeID'].astype(str) == str(emp_id)) & 
+                      (df_emp['PIN'].astype(str) == str(pin))]
         
         if not user.empty:
             st.session_state.logged_in = True
-            # [แก้ไขแล้ว] ต้องระบุ Index [0] ก่อนใช้ .to_dict() เพื่อเลือกแถวแรกที่เจอ
-            st.session_state.user_info = user.iloc[0].to_dict() 
+            # แก้ไขจุดสำคัญ: ต้องใส่ [0] หลัง iloc เพื่อระบุแถวแรกที่เจอ
+            st.session_state.user_info = user.iloc[0].to_dict()
             st.rerun()
         else:
             st.error("รหัสพนักงานหรือ PIN ไม่ถูกต้อง")
@@ -39,75 +39,75 @@ if not st.session_state.logged_in:
 # --- ส่วนของเมนูหลัก (เมื่อ Login แล้ว) ---
 else:
     user = st.session_state.user_info
-    st.sidebar.write(f"ผู้ใช้: {user['Name']} ({user['Department']})")
+    st.sidebar.write(f"👤 ผู้ใช้: {user['Name']}")
+    st.sidebar.write(f"🏢 แผนก: {user['Department']}")
     if st.sidebar.button("ออกจากระบบ"):
         st.session_state.logged_in = False
         st.rerun()
 
-    # [แก้ไขแล้ว] แยกตัวแปร tab ออกมาให้ชัดเจน แทนที่จะใช้ตัวแปรเดียว (menu)
     tab1, tab2 = st.tabs(["♻️ บันทึกขยะ", "📊 สรุปผลเปรียบเทียบ"])
 
     # --- Tab 1: บันทึกขยะ (หน้างาน) ---
     with tab1:
         st.header("บันทึกการทิ้งขยะ")
-        category = st.selectbox("ประเภทขยะ", ["เศษอาหาร (Organic)", "ขวดพลาสติก (PET)", "กระป๋องอลูมิเนียม", "ลังกระดาษ"])
+        category = st.selectbox("ประเภทขยะ", ["ขวดพลาสติก (PET)", "กระป๋องอลูมิเนียม", "เศษอาหาร", "ลังกระดาษ"])
         weight = st.number_input("น้ำหนัก (กก.)", min_value=0.0, step=0.1)
         
         if st.button("บันทึกข้อมูล ✅", type="primary", use_container_width=True):
-            new_data = pd.DataFrame([{
-                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "EmployeeID": user['EmployeeID'],
-                "Category": category,
-                "Weight_kg": weight
-            }])
-            
-            # [แก้ไขแล้ว] streamlit-gsheets ไม่มี conn.create() 
-            # ต้องอ่านข้อมูลเก่ามาต่อท้าย (concat) แล้วอัปเดตกลับไป (update)
-            try:
-                existing_data = conn.read(worksheet="WasteLog")
-                updated_data = pd.concat([existing_data, new_data], ignore_index=True)
-                conn.update(worksheet="WasteLog", data=updated_data)
+            with st.spinner('กำลังบันทึกข้อมูล...'):
+                # 1. ดึงข้อมูลเก่า (ใส่ ttl=0 เพื่อป้องกันการดึงข้อมูลเก่าจาก Cache)
+                existing_data = conn.read(worksheet="WasteLog", ttl=0)
                 
-                # ล้างแคชเพื่อให้ดึงข้อมูลใหม่เสมอเมื่อข้ามไปแท็บสรุปผล
-                st.cache_data.clear() 
+                # 2. สร้างข้อมูลใหม่
+                new_entry = pd.DataFrame([{
+                    "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "EmployeeID": user['EmployeeID'],
+                    "Category": category,
+                    "Weight_kg": weight
+                }])
                 
-                st.success("บันทึกสำเร็จ! ข้อมูลถูกส่งไปที่ระบบส่วนกลางแล้ว")
+                # 3. รวมข้อมูลและอัปเดต
+                updated_df = pd.concat([existing_data, new_entry], ignore_index=True)
+                conn.update(worksheet="WasteLog", data=updated_df)
+                
+                st.success("บันทึกสำเร็จ!")
                 st.balloons()
-            except Exception as e:
-                st.error(f"เกิดข้อผิดพลาด: {e} (โปรดตรวจสอบว่ามีแผ่นงานชื่อ WasteLog อยู่หรือไม่)")
 
-    # --- Tab 2: เปรียบเทียบ การซื้อ vs ขยะ (Dashboard) ---
+    # --- Tab 2: เปรียบเทียบ (Dashboard) ---
     with tab2:
-        st.header("📊 สรุปผลเปรียบเทียบ (Purchase vs Waste)")
+        st.header("📊 สรุปผล Purchase vs Waste")
         
-        # ดึงข้อมูลจาก Sheets
-        df_p = conn.read(worksheet="Purchases")
-        df_w = conn.read(worksheet="WasteLog")
+        df_p = conn.read(worksheet="Purchases", ttl=0)
+        df_w = conn.read(worksheet="WasteLog", ttl=0)
         
         if not df_p.empty and not df_w.empty:
-            # รวมยอดซื้อและยอดขยะตาม Category
+            # รวมยอดตาม Category
             buy_sum = df_p.groupby('Category')['Quantity'].sum().reset_index()
             waste_sum = df_w.groupby('Category')['Weight_kg'].sum().reset_index()
             
-            # Merge ข้อมูลเข้าด้วยกัน
+            # Merge ข้อมูล
             comparison = pd.merge(buy_sum, waste_sum, on='Category', how='left').fillna(0)
+            comparison['Waste_%'] = (comparison['Weight_kg'] / comparison['Quantity'].replace(0, 1)) * 100
             
-            # คำนวณ % Waste (เลี่ยงการหารด้วยศูนย์)
-            comparison['Waste_Percentage'] = (comparison['Weight_kg'] / comparison['Quantity'].replace(0, 1)) * 100
+            # การแสดงผล Metric (ปรับปรุงให้รองรับมือถือ: แสดงแถวละ 2 ตัว)
+            st.subheader("แยกตามประเภท")
+            for i in range(0, len(comparison), 2):
+                cols = st.columns(2)
+                for j in range(2):
+                    if i + j < len(comparison):
+                        row = comparison.iloc[i + j]
+                        cols[j].metric(
+                            label=row['Category'],
+                            value=f"{row['Weight_kg']:.1f} kg",
+                            delta=f"{row['Waste_%']:.1f}% ของยอดซื้อ",
+                            delta_color="inverse" # สีแดงเมื่อตัวเลขเพิ่มขึ้น (เพราะขยะเยอะไม่ดี)
+                        )
             
-            # แสดง Metric สรุป
-            st.subheader("สถานะแยกตามประเภท")
-            m_cols = st.columns(len(comparison))
-            for idx, row in comparison.iterrows():
-                m_cols[idx].metric(
-                    label=row['Category'],
-                    value=f"{row['Weight_kg']:.1f} kg",
-                    delta=f"{row['Waste_Percentage']:.1f}% ของยอดซื้อ",
-                    delta_color="inverse"
-                )
-            
-            # แสดงกราฟเปรียบเทียบ
-            st.subheader("กราฟเปรียบเทียบยอดซื้อ vs ขยะ")
+            # กราฟ
+            st.subheader("เปรียบเทียบ Quantity vs Waste")
             st.bar_chart(comparison.set_index('Category')[['Quantity', 'Weight_kg']])
+            
+            # ตารางสรุป
+            st.dataframe(comparison, use_container_width=True)
         else:
-            st.info("ยังไม่มีข้อมูลการซื้อหรือข้อมูลขยะในระบบ")
+            st.info("ยังไม่มีข้อมูลในระบบ")
