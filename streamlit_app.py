@@ -31,7 +31,7 @@ if not st.session_state.logged_in:
         if not user.empty:
             st.session_state.logged_in = True
             # แก้ไขจุด iloc เพื่อดึงแถวแรกมาเป็น Dictionary
-            st.session_state.user_info = user.iloc[0]to_dict()
+            st.session_state.user_info = user.iloc[0].to_dict()
             st.rerun()
         else:
             st.error("รหัสพนักงานหรือ PIN ไม่ถูกต้อง")
