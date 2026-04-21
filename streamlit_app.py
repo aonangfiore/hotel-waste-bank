@@ -43,7 +43,7 @@ if not st.session_state.logged_in:
         
         if not user.empty:
             st.session_state.logged_in = True
-            st.session_state.user_info = user.iloc.to_dict()
+            st.session_state.user_info = user.iloc[0].to_dict()
             st.rerun()
         else:
             st.error("ID หรือ PIN ไม่ถูกต้อง")
