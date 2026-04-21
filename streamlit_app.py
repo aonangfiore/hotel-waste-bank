@@ -29,7 +29,8 @@ if not st.session_state.logged_in:
         user = df_emp[(df_emp['EmployeeID'] == emp_id) & (df_emp['PIN'].astype(str) == pin)]
         if not user.empty:
             st.session_state.logged_in = True
-            st.session_state.user_info = user.iloc.to_dict()
+            # เพิ่ม เข้าไปหลัง iloc
+            st.session_state.user_info = user.iloc.to_dict() 
             st.rerun()
         else:
             st.error("รหัสพนักงานหรือ PIN ไม่ถูกต้อง")
