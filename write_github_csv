@@ -1,0 +1,26 @@
+from github import Github, GithubException
+
+def write_github_csv(file_path, df, message):
+    try:
+        # 1. พยายามดึงข้อมูลไฟล์เดิมมาก่อน เพื่อเอาค่า SHA ล่าสุด
+        file_content = repo.get_contents(file_path)
+        
+        # 2. ถ้าเจอไฟล์เดิม ให้อัปเดต (update_file)
+        repo.update_file(
+            path=file_path, 
+            message=message, 
+            content=df.to_csv(index=False), 
+            sha=file_content.sha
+        )
+    except GithubException as e:
+        # 3. เช็คว่า Error เพราะ "หาไฟล์ไม่เจอ (404)" ใช่หรือไม่
+        if e.status == 404:
+            # ถ้ายังไม่มีไฟล์ ให้ใช้คำสั่งสร้างใหม่ (create_file)
+            repo.create_file(
+                path=file_path, 
+                message=message, 
+                content=df.to_csv(index=False)
+            )
+        else:
+            # ถ้าเป็น Error อื่นๆ ให้แจ้งเตือนออกมา
+            st.error(f"เกิดข้อผิดพลาดในการเชื่อมต่อ GitHub: {e}")
