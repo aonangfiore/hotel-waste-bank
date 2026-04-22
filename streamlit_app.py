@@ -9,12 +9,11 @@ st.set_page_config(page_title="Hotel Waste Bank (GitHub DB)", layout="centered")
 
 # 2. เชื่อมต่อ GitHub API
 try:
-    from github import Auth
-auth = Auth.Token(st.secrets["GITHUB_TOKEN"])
-g = Github(auth=auth)
+    # ตรวจสอบว่ามีวงเล็บปิดครบถ้วน
+    g = Github(st.secrets["GITHUB_TOKEN"])
     repo = g.get_repo(st.secrets["REPO_NAME"])
 except Exception as e:
-    st.error("การเชื่อมต่อ GitHub ผิดพลาด ตรวจสอบ Secrets ของคุณ")
+    st.error(f"การเชื่อมต่อ GitHub ผิดพลาด: {e}")
     st.stop()
 
 # ฟังก์ชันอ่านไฟล์ CSV จาก GitHub
