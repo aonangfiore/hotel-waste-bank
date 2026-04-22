@@ -9,7 +9,9 @@ st.set_page_config(page_title="Hotel Waste Bank (GitHub DB)", layout="centered")
 
 # 2. เชื่อมต่อ GitHub API
 try:
-    g = Github(st.secrets["GITHUB_TOKEN"])
+    from github import Auth
+auth = Auth.Token(st.secrets["GITHUB_TOKEN"])
+g = Github(auth=auth)
     repo = g.get_repo(st.secrets["REPO_NAME"])
 except Exception as e:
     st.error("การเชื่อมต่อ GitHub ผิดพลาด ตรวจสอบ Secrets ของคุณ")
